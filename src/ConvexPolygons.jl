@@ -5,6 +5,7 @@ import GeometryBasics: AbstractPoint, Point, Point2, Point3, AbstractPolygon, ar
 
 
 export ConvexPolygon, area, centroid, normal, coordinates, convex2poly
+export pnpoly, numverts
 
 """
 `ConvexPolygon(pts)`
@@ -48,8 +49,13 @@ area(p::ConvexPolygon{2,T}) where {T} = area(coordinates(p))
 `normal(p::ConvexPolygon{2,T})`
 
 Computes the surface area of a [`ConvexPolygon`](@ref).
+
+For 2d polygons it returns a positive area  if the contour
+is oriented in counter-clockwise direction and negative area if
+clockwise.
+
 """
-normal(p::ConvexPolygon{2,T}) where {T} = area(coordinages(p))
+normal(p::ConvexPolygon{2,T}) where {T} = area(p)
 
 crossprod(u::Point3, v::Point3) = (u[2]*v[3] - u[3]*v[2],
                                    u[3]*v[1] - u[1]*v[3],
@@ -126,4 +132,27 @@ end
 
 convex2poly(p::ConvexPolygon) = Polygon(coordinates(p))
 
+numverts(p::ConvexPolygon) = length(p.contour)
+Base.length(p::ConvexPolygon) = length(p.contour)
+
+
+
+function pnpoly(p::Point2{T}, poly::ConvexPolygon{2,T}) where {T}
+    j = lastindex(poly.contour)
+    test = false
+    x = p[1]
+    y = p[2]
+    for i in eachindex(poly.contour)
+        vi = poly.contour[i]
+        vj = poly.contour[j]
+        if ((vi[2] > y) != (vj[2] > y)) &&
+            ( x ≤ (vj[1]-vi[1]) * (y - vi[2]) / (vj[2] - vi[2]) + vi[1])
+            test = !test
+        end
+        j = i
+    end
+    return test
+end
+
+    
 end
