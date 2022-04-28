@@ -1,0 +1,3 @@
+[deps]
+ConvexPolygons = "bd678e46-537b-4837-9db2-8bbb0917495c"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
