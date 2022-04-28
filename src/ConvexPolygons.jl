@@ -136,7 +136,11 @@ numverts(p::ConvexPolygon) = length(p.contour)
 Base.length(p::ConvexPolygon) = length(p.contour)
 
 
+"""
+`pnpoly(p, poly)`
 
+Checks whether a point is inside a polygon.
+"""
 function pnpoly(p::Point2{T}, poly::ConvexPolygon{2,T}) where {T}
     j = lastindex(poly.contour)
     test = false
@@ -153,6 +157,8 @@ function pnpoly(p::Point2{T}, poly::ConvexPolygon{2,T}) where {T}
     end
     return test
 end
+
+Base.in(p::Point, poly::ConvexPolygon) where {T} = pnpoly(p, poly)
 
     
 end
