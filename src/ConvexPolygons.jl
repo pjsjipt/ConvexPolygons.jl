@@ -1,11 +1,13 @@
 module ConvexPolygons
 
-import GeometryBasics: AbstractPoint, Point, Point2, Point3, AbstractPolygon, area
+using Meshes
+#import Meshes: Polygon, Chain, Point, Point2, Point3, normal, centroid, area
+#import Meshes: coordinates, vertices, nvertices, measure
+#import Meshes: isclosed
 
+export ConvexPolygon, area, centroid, normal, coordinates, convex2poly, vertices
+export pnpoly, nvertices, measure, issimple, hasholes, chains
 
-
-export ConvexPolygon, area, centroid, normal, coordinates, convex2poly
-export pnpoly, numverts
 
 """
 `ConvexPolygon(pts)`
@@ -18,32 +20,68 @@ export pnpoly, numverts
 Creates a convex polygon from the vertices. It does not check anything! 
 It just stores the vertices as a contour.
 """
-struct ConvexPolygon{Dim,T,P<:AbstractPoint{Dim,T},L<:AbstractVector{P}} <: AbstractPolygon{Dim,T}
-    contour::L
+struct ConvexPolygon{Dim,T,C<:Chain{Dim,T}} <: Polygon{Dim,T}
+    contour::C
+    function ConvexPolygon(contour::Chain{Dim,T}) where {Dim,T}
+        @assert isclosed(contour) "invalid outer chain"
+        new{Dim,T,Chain{Dim,T}}(contour)
+    end
 end
 
-ConvexPolygon(x::AbstractVector, y::AbstractVector) =
-    ConvexPolygon([Point2(xx, yy) for (xx,yy) in zip(x,y)])
+    
 
-ConvexPolygon(x::AbstractVector, y::AbstractVector, z::AbstractVector) =
-    ConvexPolygon([Point3(xx, yy,zz) for (xx,yy,zz) in zip(x,y,z)])
+ConvexPolygon(x::AbstractVector{T}, y::AbstractVector{T}) where {T} =
+    ConvexPolygon([Point{2,T}(xx, yy) for (xx,yy) in zip(x,y)])
 
-#ConvexPolygon(pts::E) where {E<:AbstractVector{P}} where {P<:AbstractPoint{Dim,T}} where {Dim,T} = ConvexPolygon{Dim,T,P,E}(pts)
+ConvexPolygon(x::AbstractVector{T},
+              y::AbstractVector{T}, z::AbstractVector{T}) where {T} =
+    ConvexPolygon([Point{3,T}(xx, yy,zz) for (xx,yy,zz) in zip(x,y,z)])
 
-import GeometryBasics.coordinates
+ConvexPolygon(pts::AbstractVector{P}) where {P<:Point} =
+    ConvexPolygon(Chain(pts))
+
+ConvexPolygon(pts::AbstractVector{TP}) where {TP<:Tuple} =
+    ConvexPolygon(Chain(Point.(pts)))
+
+
 """
-`coordinates(p::ConvexPolygon)`
+`vertices(p::ConvexPolygon)`
 
 Returns the coordinates of the vertices of a [`ConvexPolygon`].
 """
-coordinates(p::ConvexPolygon) = p.contour
+Meshes.vertices(p::ConvexPolygon) = vertices(p.contour)
+Meshes.nvertices(p::ConvexPolygon) = nvertices(p.contour)
+
+Meshes.issimple(p::ConvexPolygon) = true
+Meshes.hasholes(p::ConvexPolygon) = false
+Meshes.chains(p::ConvexPolygon) = [p.contour]
 
 """
-`area(p::ConvexPolygon{2,T})`
+`normal(p::ConvexPolygon{2,T})`
 
 Computes the surface area of a 2D [`ConvexPolygon`](@ref).
+
+If the area is positive, the normal is pointed upwards and the vertices
+are in counter clockwise direction.
 """
-area(p::ConvexPolygon{2,T}) where {T} = area(coordinates(p))
+function Meshes.normal(p::ConvexPolygon{2,T}) where {T}
+    nv = nvertices(p)
+    verts = vertices(p)
+    x₁,y₁ = coordinates(verts[end])
+    x₂,y₂ = coordinates(verts[begin])
+    
+    A = x₁*y₂ - x₂*y₁
+    
+    for i in 2:nv
+        x₁,y₁ = coordinates(verts[i-1])
+        x₂,y₂ = coordinates(verts[i])
+        A += x₁*y₂ - x₂*y₁
+    end
+
+    return A/2
+end
+
+import Meshes.area
 
 """
 `normal(p::ConvexPolygon{2,T})`
@@ -55,25 +93,26 @@ is oriented in counter-clockwise direction and negative area if
 clockwise.
 
 """
-normal(p::ConvexPolygon{2,T}) where {T} = area(p)
+Meshes.area(p::ConvexPolygon{2,T}) where {T} = abs(normal(p))
 
-crossprod(u::Point3, v::Point3) = (u[2]*v[3] - u[3]*v[2],
-                                   u[3]*v[1] - u[1]*v[3],
-                                   u[1]*v[2] - u[2]*v[1])
+
+crossprod(u, v) = (u[2]*v[3] - u[3]*v[2],
+                   u[3]*v[1] - u[1]*v[3],
+                   u[1]*v[2] - u[2]*v[1])
                                    
-function normal(p::ConvexPolygon{3,T}) where {T}
-    v = coordinates(p)
+function Meshes.normal(p::ConvexPolygon{3,T}) where {T}
+    v = vertices(p)
     nv = length(v)
-    x,y,z = crossprod(v[end], v[begin])
+    x,y,z = crossprod(coordinates(v[end]), coordinates(v[begin]))
 
     for i in 2:nv
-        prd = crossprod(v[i-1], v[i])
+        prd = crossprod(coordinates(v[i-1]), coordinates(v[i]))
         x += prd[1]
         y += prd[2]
         z += prd[3]
     end
 
-    return Point3(x/2, y/2, z/2)
+    return Vec(x/2, y/2, z/2)
     
 end
 
@@ -82,47 +121,54 @@ end
 
 Computes the surface area of a 2D [`ConvexPolygon`](@ref).
 """
-area(p::ConvexPolygon{3}) = hypot(normal(p)...)
+Meshes.area(p::ConvexPolygon{3}) = hypot(normal(p)...)
 
 """
 `centroid(p)`
 
 Computes the centroid of a [`ConvexPolygon`](@ref).
 """                      
-function centroid(p::ConvexPolygon{2,T}) where {T}
+function Meshes.centroid(p::ConvexPolygon{2,T}) where {T}
 
-    A = area(p)
+    A = normal(p)
 
-    v = coordinates(p)
+    v = vertices(p)
     nv = length(v)
 
     # xᵢyᵢ₊₁ - xᵢ₊₁yᵢ  First index = last index
-    tmp = v[end][1]*v[begin][2] - v[begin][1]*v[end][2]
+    x₁, y₁ = coordinates(v[end])
+    x₂, y₂ = coordinates(v[begin])
+    tmp = x₁*y₂ - x₂*y₁
     
-    Cx = (v[end][1] + v[begin][1]) * tmp
-    Cy = (v[end][2] + v[begin][2]) * tmp
+    Cx = (x₁ + x₂) * tmp
+    Cy = (y₁ + y₂) * tmp
 
-    for i in firstindex(v):lastindex(v)-1
-        tmp = v[i][1]*v[i+1][2] - v[i+1][1]*v[i][2]
-        Cx += (v[i][1] + v[i+1][1]) * tmp
-        Cy += (v[i][2] + v[i+1][2]) * tmp
+    for i in firstindex(v):lastindex(v)-1 
+        x₁, y₁ = coordinates(v[i])
+        x₂, y₂ = coordinates(v[i+1])
+        tmp = x₁*y₂ - x₂*y₁
+        Cx += (x₁ + x₂) * tmp
+        Cy += (y₁ + y₂) * tmp
     end
 
-    return Point2{T}(Cx/6A, Cy/6A)
+    return Point{2,T}(Cx/6A, Cy/6A)
 end
 
-function centroid(p::ConvexPolygon{3,T}) where {T}
-    v = coordinates(p)
+function Meshes.centroid(p::ConvexPolygon{3,T}) where {T}
+    v = vertices(p)
     nv = length(v)
     nrm = normal(p)
     A = hypot(nrm...)
     n⃗ = nrm ./ A
     
-    C = Point3{T}(0,0,0)
-    v₀ = v[begin]
+    C = Vec{3,T}(0,0,0)
+    v₀ = coordinates(v[begin])
     for i = (firstindex(v)+1):(lastindex(v)-1)
-        centr = (v₀ + v[i] + v[i+1]) ./ 3
-        Aᵢ⃗ = crossprod(v[i]-v₀, v[i+1]-v₀) ./ 2
+        v₁ = coordinates(v[i])
+        v₂ = coordinates(v[i+1])
+                          
+        centr = (v₀ + v₁ + v₂) ./ 3
+        Aᵢ⃗ = crossprod(v₁-v₀, v₂-v₀) ./ 2
         s = sign(sum(Aᵢ⃗ .* n⃗))
         C += s * centr .* hypot(Aᵢ⃗...)
     end
@@ -132,23 +178,20 @@ end
 
 convex2poly(p::ConvexPolygon) = Polygon(coordinates(p))
 
-numverts(p::ConvexPolygon) = length(p.contour)
-Base.length(p::ConvexPolygon) = length(p.contour)
-
 
 """
 `pnpoly(p, poly)`
 
 Checks whether a point is inside a polygon.
 """
-function pnpoly(p::Point2{T}, poly::ConvexPolygon{2,T}) where {T}
-    j = lastindex(poly.contour)
+function pnpoly(p::Point{2,T}, poly::ConvexPolygon{2,T}) where {T}
+    verts = vertices(poly.contour)
+    j = lastindex(verts)
     test = false
-    x = p[1]
-    y = p[2]
-    for i in eachindex(poly.contour)
-        vi = poly.contour[i]
-        vj = poly.contour[j]
+    x, y = coordinates(p)
+    for i in eachindex(verts)
+        vi = coordinates(verts[i])
+        vj = coordinates(verts[j])
         if ((vi[2] > y) != (vj[2] > y)) &&
             ( x ≤ (vj[1]-vi[1]) * (y - vi[2]) / (vj[2] - vi[2]) + vi[1])
             test = !test
@@ -160,5 +203,51 @@ end
 
 Base.in(p::Point, poly::ConvexPolygon) where {T} = pnpoly(p, poly)
 
+function project_point(p::Point{3}, p₀::Point{3}, P::Plane)
+    w = p-p₀
+    return Point(w⋅P.u, w⋅P.v)
+end
+
+import CircularArrays: CircularVector
+function pnpoly(p::Point{3,T}, poly::ConvexPolygon{3,T}) where {T}
+    # 3d case
+    # First we needto determine if the point lies in the same plane
+    # as the polygon
+
+    n = normal(poly)  # Normal To the polygon
+    A = hypot(n...)  # Area
+    L = sqrt(A)
+    verts = vertices(poly)
+    v₀ = verts[1]
+    δ = abs(n⋅(p-v₀)) / A
+    e = sqrt(eps(L))
+    if δ > e
+        return false
+    end
+
+    # The point is in the same plane as the polygon
+    # Project the polygon on the plane
+    # Since the polygon is complex, we can check each triangle
+    nv = nvertices(poly)
+    P = Plane(p, n)
+
+    foundtri = false
+    u₀ = Point(0.0,0.0) # reference point, first vertex in 2d
+    p₂ = project_point(p, v₀, P)
+    for i in 3:nv
+        u₁ = project_point(verts[i-1], v₀, P)
+        u₂ = project_point(verts[i],   v₀, P)
+        tri = Triangle(u₀, u₁, u₂)
+
+        if p₂ ∈ tri
+            return true
+        end
+    end
     
+    return false
+    
+end
+
+
+
 end
