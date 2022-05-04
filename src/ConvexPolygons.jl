@@ -249,5 +249,45 @@ function pnpoly(p::Point{3,T}, poly::ConvexPolygon{3,T}) where {T}
 end
 
 
+"""
+`pnpoly(p, tri)`
+
+Checks whether a point is inside a Triangle.
+"""
+pnpoly(p::Point{2,T}, tri::Triangle{2,T}) where {T} = p ∈ tri
+
+function pnpoly(p::Point{3,T}, tri::Triangle{3,T}) where {T}
+
+
+
+    n = normal(tri)  # Normal To the triangle
+    A = area(tri)  # Area
+    L = sqrt(A)
+    v₀ = tri.vertices[1]
+    δ = abs(n⋅(p-v₀)) / A
+    e = sqrt(eps(L))
+    if δ > e
+        return false
+    end
+
+    # The point is in the same plane as the polygon
+    # Project the polygon on the plane
+    # Since the polygon is complex, we can check each triangle
+    P = Plane(p, n)
+    u₀ = Point{2,T}(0,0)
+    u₁ = project_point(tri.vertices[2], v₀, P)
+    u₂ = project_point(tri.vertices[3], v₀, P)
+
+    p₂ = project_point(p, v₀, P)
+
+    tri₂ = Triangle(u₀, u₁, u₂)
+
+    return p₂ ∈ tri₂
+    
+
+end
+
+
+
 
 end

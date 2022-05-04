@@ -65,9 +65,44 @@ using Test
     @test normal(poly5) ≈ Vec(0.0, 0.0, -1.0)
     
     
+    @test pnpoly(Point(0.5, 0.5, 0.0), poly4)
+    @test pnpoly(Point(0.5, 0.5, 0.0), poly5)
+
+
+    @test Point(0.5, 0.5, 0.0) ∈ poly4
+    @test Point(0.5, -0.5, 0.0) ∉ poly4
+    @test Point(0.5, -eps(), 0.0) ∉ poly4
+    @test Point(eps(), eps(), 0.0) ∈ poly4
     
+    @test Point(0.5, 0.5, 1e-5) ∉ poly4
+    @test Point(0.5, 0.5, sqrt(eps())*5) ∉ poly4
+    @test Point(0.5, 0.5, sqrt(eps())/5) ∈ poly4
+
+    poly6 = ConvexPolygon([0.0, 1, 1, 0,0], [0.0, 0, 1, 1,0],
+                          [0.0, 0, 1, 1,0])
+    A = area(poly6)
+    @test A ≈ sqrt(2)
+    n = normal(poly6)
+    @test n ./ A ≈ Vec(0.0, -sqrt(2)/2, sqrt(2)/2)
+                 
     
+    @test Point(0.5, 0.5, 0.5) ∈ poly6
+    @test Point(-eps(), 0.5, 0.5) ∉ poly6
+    @test Point(0.5, -eps(), -eps()) ∉ poly6
+    @test Point(eps(), eps(), eps()) ∈ poly6
     
+    @test Point(0.5, 0.5, 0.5+1e-5) ∉ poly6
+    @test Point(0.5, 0.5, 0.5 + sqrt(eps())*5) ∉ poly6
+    @test Point(0.5, 0.5, 0.5 + sqrt(eps())/5) ∈ poly6
+    
+    pt = Point{3,Float64}[(0.0,0.0, 0.0), (1.0,0.0,0.0), (0.0,1.0, 1.0)]
+    tri = Triangle(pt)
+    
+    @test pnpoly(Point(0.2, 0.2, 0.2), tri)
+    @test !pnpoly(Point(0.2, 0.2, 0.21), tri)
+    @test !pnpoly(Point(-eps(), -eps(), -eps()), tri)
+    @test pnpoly(Point(0.2, 0.2, 0.2+0.2*√eps()), tri)
+    @test !pnpoly(Point(0.2, 0.2, 0.2+5*√eps()), tri)
     
 
     
